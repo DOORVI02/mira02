@@ -435,12 +435,19 @@ If you attempt to answer in natural language before generating charts, the orche
     const MIN_CHARTS = 3;
     const MAX_ROUNDS = 10;
 
+    let pendingMessage: string | null = initialPrompt;
+    
     for (let round = 0; round < MAX_ROUNDS; round++) {
       console.log(`\n   🔁 LLM ROUND ${round + 1}`);
 
-      const result = await chat.sendMessage(
-        round === 0 ? initialPrompt : '',
-      );
+      if (!pendingMessage) {
+        console.log('      ⚠️ No pending message, breaking loop');
+        break;
+      }
+
+      const result = await chat.sendMessage(pendingMessage);
+      pendingMessage = null; // Clear after sending
+      
       const response = result.response;
       stepCount++;
 
@@ -552,8 +559,37 @@ If you attempt to answer in natural language before generating charts, the orche
 
         // Send function responses back to model using proper format
         console.log(`      📤 Sending ${functionResponseParts.length} function response(s) to model`);
-        await chat.sendMessage(functionResponseParts);
+        const funcResult = await chat.sendMessage(functionResponseParts);
+        
+        // Check if the model responded with more function calls or text
+        const funcResponse = funcResult.response;
+        const nextFunctionCalls = funcResponse.functionCalls();
+        
+        if (nextFunctionCalls && nextFunctionCalls.length > 0) {
+          // Model wants to call more functions - set up for next round
+          pendingMessage = 'Continue with the analysis.';
+        } else {
+          // Model responded with text - check if we need more charts
+          const funcText = funcResponse.text().trim();
+          if (allCharts.length < MIN_CHARTS) {
+            pendingMessage = `You have ${allCharts.length} charts but need ${MIN_CHARTS}. Call run_python NOW to create more charts with matplotlib.`;
+          } else if (!funcText || funcText.includes('tool_outputs') || funcText.length < 100) {
+            // Model didn't give a proper summary - ask for one
+            pendingMessage = `Great! You have generated ${allCharts.length} charts. Now provide a FINAL REPORT as JSON with this exact format:
+{
+  "summary": "2-3 sentence executive summary of the analysis",
+  "kpis": ["KPI 1: value", "KPI 2: value", "KPI 3: value"],
+  "charts": [{"title": "Chart 1 title", "bullets": ["insight 1", "insight 2"]}],
+  "nextSteps": ["recommendation 1", "recommendation 2"]
+}
 
+Respond ONLY with the JSON, no markdown fences.`;
+          } else {
+            finalSummary = funcText;
+            pendingMessage = null; // Done
+          }
+        }
+        
         // After tools, loop again
         continue;
       }
@@ -569,16 +605,22 @@ If you attempt to answer in natural language before generating charts, the orche
           `      ⚠️ Assistant tried to finish early with ${allCharts.length} charts. Forcing it to continue and create more charts.`,
         );
 
-        await chat.sendMessage(
-          `You have not yet generated the required ${MIN_CHARTS} charts. ` +
-            `Please continue the analysis:\n` +
-            `- Use run_python to compute more metrics if needed\n` +
-            `- Use run_python again to generate at least ${
-              MIN_CHARTS - allCharts.length
-            } additional visualizations with matplotlib and plt.show()\n` +
-            `Remember to weave in the external context from the system messages where relevant.\n` +
-            `Do not write a final report until all required charts are created.`,
-        );
+        const chartsNeeded = MIN_CHARTS - allCharts.length;
+        pendingMessage = `STOP. You have only generated ${allCharts.length} charts but need ${MIN_CHARTS}.
+
+You MUST call the run_python tool NOW to create ${chartsNeeded} more chart(s).
+
+Example - call run_python with this code:
+import matplotlib.pyplot as plt
+import pandas as pd
+df = pd.read_csv('/home/user/data.csv')
+# Create a meaningful visualization
+df.plot(kind='hist', figsize=(10,6))
+plt.title('Distribution')
+plt.tight_layout()
+plt.show()
+
+DO NOT respond with text. Call run_python immediately.`;
 
         continue;
       }
