@@ -150,7 +150,7 @@ Bot: ✅ Analysis Complete!
 ```mermaid
 graph TB
     subgraph "User Interface"
-        A[WhatsApp User] -->|Sends CSV| B[Twilio API]
+        A[WhatsApp User] -->|Sends CSV| B[Meta WhatsApp API]
     end
     
     subgraph "Next.js Backend - Vercel"
@@ -182,7 +182,7 @@ graph TB
     end
     
     subgraph "Delivery"
-        Q -->|Public URL| R[Twilio API]
+        Q -->|Public URL| R[Meta WhatsApp API]
         R -->|Send Message + Media| A
     end
     
@@ -198,7 +198,7 @@ graph TB
 ```mermaid
 sequenceDiagram
     participant U as User (WhatsApp)
-    participant T as Twilio
+    participant M as Meta WhatsApp API
     participant W as Webhook API
     participant S as Session Store
     participant M as MCP Sandbox (Exa)
@@ -207,8 +207,8 @@ sequenceDiagram
     participant P as PDF Generator
     participant B as Vercel Blob
     
-    U->>T: Send CSV file
-    T->>W: POST /api/webhook
+    U->>M: Send CSV file
+    M->>W: POST /api/webhook
     W->>W: Download CSV
     W->>S: Create/Update session
     W->>U: Acknowledgment message
@@ -240,8 +240,8 @@ sequenceDiagram
     P->>B: Upload PDF
     B-->>P: Public URL
     
-    W->>T: Send message + PDF link
-    T->>U: Deliver report
+    W->>M: Send message + PDF link
+    M->>U: Deliver report
     
     W->>E: Cleanup sandbox
 ```
@@ -271,7 +271,7 @@ graph LR
         I[E2B Sandboxes]
         J[Google Gemini API]
         K[Exa MCP]
-        L[Twilio API]
+        L[Meta WhatsApp API]
         M[Vercel Blob]
     end
     
@@ -301,7 +301,7 @@ graph LR
 |-----------|-----------|---------|
 | **Frontend** | Next.js 15 + React | Landing page and API routes |
 | **Styling** | Tailwind CSS | Neobrutalism design system |
-| **Messaging** | Twilio WhatsApp API | User interface and delivery |
+| **Messaging** | Meta WhatsApp Cloud API | User interface and delivery |
 | **AI Orchestration** | Google Gemini 2.5 Flash | Multi-step agent reasoning |
 | **Code Execution** | E2B Code Interpreter | Isolated Python sandboxes |
 | **Web Research** | Exa MCP (Docker) | External context enrichment |
@@ -406,10 +406,11 @@ mira/
 ### Environment Variables
 
 ```bash
-# Twilio Configuration
-TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-TWILIO_AUTH_TOKEN=your_auth_token_here
-TWILIO_WHATSAPP_NUMBER=+14155238886
+# Meta WhatsApp Cloud API
+WHATSAPP_PHONE_NUMBER_ID=your_phone_number_id_here
+WHATSAPP_ACCESS_TOKEN=your_meta_access_token_here
+WHATSAPP_VERIFY_TOKEN=your_custom_verify_token_here
+WHATSAPP_BUSINESS_ACCOUNT_ID=your_business_account_id_here
 
 # E2B Sandbox
 E2B_API_KEY=your_e2b_api_key_here
@@ -460,7 +461,7 @@ cp env.example .env.local
 | E2B | [e2b.dev](https://e2b.dev) | $100 credits |
 | Google Gemini | [ai.google.dev](https://ai.google.dev) | Free tier available |
 | Exa | [exa.ai](https://exa.ai) | 1000 searches |
-| Twilio | [twilio.com/console](https://twilio.com/console) | Free trial |
+| Meta WhatsApp | [developers.facebook.com](https://developers.facebook.com) | 1000 conversations/month |
 | Vercel Blob | [vercel.com/storage](https://vercel.com/storage) | 1GB free |
 
 4. **Start development server**
@@ -474,13 +475,17 @@ ngrok http 3000
 ```
 Copy the `https://` URL (e.g., `https://abc123.ngrok.io`)
 
-6. **Configure Twilio webhook**
-   - Go to [Twilio WhatsApp Sandbox](https://console.twilio.com/us1/develop/sms/try-it-out/whatsapp-learn)
-   - Set "When a message comes in" to: `https://abc123.ngrok.io/api/webhook`
-   - Save configuration
+6. **Configure Meta WhatsApp webhook**
+   - Go to [Meta for Developers](https://developers.facebook.com/)
+   - Create/select your app → Add WhatsApp product
+   - Go to Configuration → Webhook
+   - Set webhook URL: `https://abc123.ngrok.io/api/webhook`
+   - Set verify token: `mira_verify_token_2024`
+   - Subscribe to `messages` field
+   - Add your phone number to test recipients
 
 7. **Test the bot**
-   - Send the join code to your WhatsApp
+   - Send a message to your WhatsApp Business number
    - Send any CSV file
    - Wait 3-5 minutes for your report!
 
@@ -505,7 +510,7 @@ git push -u origin main
    - Add environment variables
    - Deploy
 
-3. **Update Twilio webhook**
+3. **Update Meta WhatsApp webhook**
    - Replace ngrok URL with your Vercel URL
    - Example: `https://your-app.vercel.app/api/webhook`
 
@@ -520,18 +525,52 @@ git push -u origin main
 
 ## 📖 API Reference
 
+### GET /api/webhook
+
+Webhook verification endpoint (Meta requirement).
+
+**Query Parameters**:
+- `hub.mode`: "subscribe"
+- `hub.verify_token`: Your verification token
+- `hub.challenge`: Challenge string to echo back
+
+**Response**: Returns the challenge string
+
+---
+
 ### POST /api/webhook
 
-Twilio webhook endpoint for incoming WhatsApp messages.
+Meta WhatsApp Cloud API webhook endpoint for incoming messages.
 
-**Request Body** (FormData):
+**Request Body** (JSON):
 ```typescript
 {
-  From: string;              // whatsapp:+1234567890
-  Body: string;              // Message text
-  NumMedia: string;          // Number of media files
-  MediaUrl0?: string;        // URL of first media file
-  MediaContentType0?: string; // MIME type
+  object: "whatsapp_business_account";
+  entry: [{
+    id: string;
+    changes: [{
+      value: {
+        messaging_product: "whatsapp";
+        metadata: {
+          display_phone_number: string;
+          phone_number_id: string;
+        };
+        messages: [{
+          from: string;
+          id: string;
+          timestamp: string;
+          type: string;
+          text?: { body: string };
+          document?: {
+            id: string;
+            mime_type: string;
+            filename: string;
+          };
+        }];
+      };
+      field: "messages";
+    }];
+  }];
 }
 ```
 
