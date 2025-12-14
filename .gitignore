@@ -13,3 +13,6 @@ dist/
 # Allow architecture diagram
 !Arc-diagram.png
 .env*.local
+
+# clerk configuration (can include secrets)
+/.clerk/

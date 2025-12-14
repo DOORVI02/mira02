@@ -11,6 +11,7 @@
     "deploy": "vercel"
   },
   "dependencies": {
+    "@clerk/nextjs": "^6.36.2",
     "@e2b/code-interpreter": "^2.2.0",
     "@google/generative-ai": "^0.21.0",
     "e2b": "^2.7.0",
