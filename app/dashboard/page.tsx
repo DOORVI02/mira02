@@ -1,21 +1,17 @@
 import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
 
 export default async function DashboardPage() {
-  const { userId } = auth();
+  const { userId } = await auth();
 
   if (!userId) {
-    return (
-      <div style={{ padding: "2rem" }}>
-        <p>You must sign in to see the dashboard.</p>
-      </div>
-    );
+    redirect("/sign-in");
   }
 
   return (
-    <div style={{ padding: "2rem" }}>
-      <h1>Dashboard</h1>
+    <div className="p-8">
+      <h1 className="text-2xl font-semibold mb-4">Dashboard</h1>
       <p>Signed in as user: {userId}</p>
     </div>
   );
 }
-

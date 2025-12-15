@@ -6,9 +6,11 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Mira",
-  description: "Mira app with Clerk auth",
+  title: "Mira - WhatsApp Data Analyst",
+  description:
+    "Mira turns messy CSVs into instant WhatsApp-ready insights with AI-driven reports. Secure authentication powered by Clerk.",
 };
+
 
 export default function RootLayout({
   children,
